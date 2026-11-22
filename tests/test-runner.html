@@ -23,6 +23,7 @@
   <script type="module">
     import { computeDesignGeometry, buildReusableStencilTile, buildSingleFullHeightStripe, dist } from '../js/geometry.js';
     import { createDefaultState, STARTER_PRESETS, applyPresetToState, diffConfigs } from '../js/presets.js';
+    import { encodeStateToHash, decodeStateFromHash } from '../js/storage.js';
     import { generateFullWallSVG, generateReusableTileSVG, generateSingleStripeSVG } from '../js/svg-export.js';
     import { computeSingleStripePdfPlan, generateSingleStripePDF, generateReusableStripPDF } from '../js/pdf-export.js';
 
@@ -126,6 +127,22 @@
       const diffs = diffConfigs(a, b);
       assert(diffs.some((d) => d.label === 'Pattern'), 'Expected Pattern diff');
       assert(diffs.some((d) => d.label === 'Curve Amount'), 'Expected Curve Amount diff');
+    });
+
+    test('Shareable URL hash encodes and decodes design state cleanly', () => {
+      const orig = applyPresetToState(createDefaultState(), 'curved-baseball');
+      orig.layout.stripeSpacingIn = 15.5;
+      orig.layout.curveAmplitudeIn = 3.1;
+      orig.stitch.lengthIn = 0.85;
+      const hash = encodeStateToHash(orig);
+      assert(hash.startsWith('#d='), 'Expected #d= hash prefix');
+      const decoded = decodeStateFromHash(hash, createDefaultState());
+      assert(decoded !== null, 'Failed to decode share hash');
+      assert(decoded.layout.type === 'curved-stripes', 'Decoded layout type mismatch');
+      assert(decoded.layout.stripeSpacingIn === 15.5, 'Decoded stripeSpacingIn mismatch');
+      assert(decoded.layout.curveAmplitudeIn === 3.1, 'Decoded curveAmplitudeIn mismatch');
+      assert(decoded.stitch.lengthIn === 0.85, 'Decoded stitch length mismatch');
+      assert(decodeStateFromHash('#d=!!!invalid', createDefaultState()) === null, 'Invalid hash should return null');
     });
 
     const passedCount = results.filter((r) => r.passed).length;

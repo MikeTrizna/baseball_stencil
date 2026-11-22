@@ -21,6 +21,8 @@ import {
   saveSnapshots,
   saveCustomPhotoDataUrl,
   loadCustomPhotoDataUrl,
+  encodeStateToHash,
+  decodeStateFromHash,
 } from './storage.js';
 import {
   renderStage,
@@ -959,9 +961,28 @@ function bindControls() {
     drawMainStage();
   });
 
-  // Snapshots & Compare
+  // Snapshots, Compare & Shareable URL Link
   $('btn-save-snapshot').addEventListener('click', saveCurrentAsSnapshot);
   $('btn-compare').addEventListener('click', () => openCompareModal('current'));
+  $('btn-share-link').addEventListener('click', async () => {
+    const hash = encodeStateToHash(state);
+    const shareUrl = `${window.location.origin}${window.location.pathname}${hash}`;
+    try {
+      window.history.replaceState(null, '', hash);
+    } catch {
+      // Ignore if running from restricted context
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast('Share link copied! Send it to share this exact design.');
+      } else {
+        window.prompt('Copy this shareable design link:', shareUrl);
+      }
+    } catch {
+      window.prompt('Copy this shareable design link:', shareUrl);
+    }
+  });
   $('cmp-select-a').addEventListener('change', renderCompareModal);
   $('cmp-select-b').addEventListener('change', renderCompareModal);
   $('btn-cmp-side').addEventListener('click', () => { compareMode = 'side'; renderCompareModal(); });
@@ -1110,10 +1131,29 @@ function bindControls() {
 }
 
 async function init() {
+  // If opened via a shared URL (#d=...), load that design cleanly on top of defaults
+  const shared = decodeStateFromHash(window.location.hash, createDefaultState());
+  if (shared) {
+    state = shared;
+    saveState(state);
+  }
+
   renderPresetButtons();
   bindControls();
   setupCanvasInteractions();
   updateUndoButtons();
+
+  window.addEventListener('hashchange', () => {
+    const nextShared = decodeStateFromHash(window.location.hash, createDefaultState());
+    if (nextShared) {
+      pushUndoSnapshot();
+      state = nextShared;
+      saveState(state);
+      syncControlsFromState();
+      drawMainStage();
+      showToast('Loaded shared design from link!');
+    }
+  });
 
   const savedPhoto = await loadCustomPhotoDataUrl();
   if (savedPhoto) {
@@ -1128,6 +1168,10 @@ async function init() {
   syncControlsFromState();
   renderSnapshotsTray();
   drawMainStage();
+
+  if (shared) {
+    showToast('Loaded shared design from link!');
+  }
 }
 
 init();

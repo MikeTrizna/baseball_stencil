@@ -652,6 +652,7 @@ input[type="color"] {
   height: 100%;
   display: block;
   cursor: grab;
+  touch-action: none;
 }
 
 #stage-canvas.calibrating {
@@ -1028,15 +1029,32 @@ input[type="color"] {
 }
 
 @media (max-width: 960px) {
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+  }
   .workspace {
     flex-direction: column;
-    overflow-y: auto;
+    overflow: visible;
+  }
+  .stage-column {
+    order: -1;
+    overflow: visible;
+  }
+  .canvas-wrap {
+    height: 52vh;
+    min-height: 320px;
   }
   .sidebar {
     width: 100%;
-    max-height: 44vh;
+    max-height: none;
     border-right: none;
-    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
   }
   .export-grid,
   .compare-side-grid {
