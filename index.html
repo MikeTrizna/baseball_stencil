@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Baseball Stitch Stencil Designer</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Action Bar -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-ball" aria-hidden="true">⚾</span>
+        <div>
+          <h1>Baseball Stitch Stencil Designer</h1>
+          <span class="brand-sub">Vertical Wallpaper Stripe &amp; 1:1 Stencil Studio</span>
+        </div>
+      </div>
+
+      <div class="mode-switch" role="tablist" aria-label="Room mockup mode">
+        <button id="btn-mode-wall2d" class="mode-btn active" role="tab" aria-selected="true">2D Wall Builder</button>
+        <button id="btn-mode-photo" class="mode-btn" role="tab" aria-selected="false">Photo Overlay</button>
+      </div>
+
+      <div class="topbar-actions">
+        <button id="btn-undo" class="btn btn-ghost" title="Undo (Ctrl+Z)" disabled>↩ Undo</button>
+        <button id="btn-redo" class="btn btn-ghost" title="Redo (Ctrl+Shift+Z)" disabled>↪ Redo</button>
+        <button id="btn-guide" class="btn btn-secondary">📏 Measurement Guide</button>
+        <button id="btn-save-snapshot" class="btn btn-secondary">📌 Save Snapshot</button>
+        <button id="btn-compare" class="btn btn-secondary">⚖️ Compare</button>
+        <button id="btn-export" class="btn btn-primary">🖨️ Export 1:1 Stencil</button>
+      </div>
+    </header>
+
+    <!-- Main Studio Grid -->
+    <div class="workspace">
+      <!-- Left Controls Panel -->
+      <aside class="sidebar" aria-label="Design controls">
+        <!-- Starter Presets (2 focused options) -->
+        <section class="panel-section">
+          <div class="section-header">
+            <h2>Starter Presets</h2>
+            <div class="unit-toggle" title="Toggle display units">
+              <button id="btn-unit-in" class="unit-btn active">in</button>
+              <button id="btn-unit-cm" class="unit-btn">cm</button>
+            </div>
+          </div>
+          <div id="preset-grid" class="preset-grid"></div>
+        </section>
+
+        <!-- Stripe Pattern -->
+        <section class="panel-section">
+          <div class="section-header">
+            <h2>Stripe Pattern</h2>
+            <button id="btn-center-seam" class="btn-link" title="Center stripes on wall">Center</button>
+          </div>
+          <div class="segmented-2" id="layout-type-group">
+            <button data-layout="straight-stripes" class="seg-btn active">Straight Vertical</button>
+            <button data-layout="curved-stripes" class="seg-btn">Curved Baseball</button>
+          </div>
+
+          <div class="control-row">
+            <label for="ctrl-stripe-spacing">Stripe Spacing (Horizontal) <span class="val" id="val-stripe-spacing"></span></label>
+            <input id="ctrl-stripe-spacing" type="range" min="5" max="36" step="0.5" />
+          </div>
+
+          <div class="control-row">
+            <label for="ctrl-offset-x">Horizontal Shift <span class="val" id="val-offset-x"></span></label>
+            <input id="ctrl-offset-x" type="range" min="-18" max="18" step="0.5" />
+          </div>
+
+          <div id="layout-controls-curved" class="control-stack hidden">
+            <div class="control-row">
+              <label for="ctrl-curve-amp">Curve Amount <span class="val" id="val-curve-amp"></span></label>
+              <input id="ctrl-curve-amp" type="range" min="0.25" max="6" step="0.1" />
+            </div>
+            <div class="control-row">
+              <label for="ctrl-curve-cycles">Curve Waves (Top → Bottom) <span class="val" id="val-curve-cycles"></span></label>
+              <input id="ctrl-curve-cycles" type="range" min="0.5" max="3" step="0.25" />
+            </div>
+            <div class="control-row">
+              <label>Curve Pairing</label>
+              <div class="segmented-2" id="curve-style-group">
+                <button data-curve-style="opposing" class="seg-btn active">Opposing (Baseball Pairs)</button>
+                <button data-curve-style="parallel" class="seg-btn">Parallel Waves</button>
+              </div>
+            </div>
+            <label class="check-row">
+              <input id="ctrl-alt-dir" type="checkbox" />
+              <span>Alternate V-direction on opposing stripes</span>
+            </label>
+          </div>
+
+          <label class="check-row">
+            <input id="ctrl-flip-dir" type="checkbox" />
+            <span>Flip V-stitch direction (Up / Down)</span>
+          </label>
+        </section>
+
+        <!-- Stitch Dimensions -->
+        <section class="panel-section">
+          <div class="section-header">
+            <h2>Stitch Geometry</h2>
+          </div>
+
+          <div class="control-row">
+            <label for="ctrl-length">Stitch Length <span class="val" id="val-length"></span></label>
+            <input id="ctrl-length" type="range" min="0.25" max="3.0" step="0.05" />
+          </div>
+          <div class="control-row">
+            <label for="ctrl-width">Stitch Thickness <span class="val" id="val-width"></span></label>
+            <input id="ctrl-width" type="range" min="0.06" max="0.65" step="0.01" />
+          </div>
+          <div class="control-row">
+            <label for="ctrl-spacing">Vertical Pitch (Spacing) <span class="val" id="val-spacing"></span></label>
+            <input id="ctrl-spacing" type="range" min="0.3" max="3.5" step="0.05" />
+          </div>
+          <div class="control-row">
+            <label for="ctrl-vangle">V-Angle <span class="val" id="val-vangle"></span></label>
+            <input id="ctrl-vangle" type="range" min="18" max="68" step="1" />
+          </div>
+          <div class="control-row">
+            <label for="ctrl-gap">Center Seam Gap <span class="val" id="val-gap"></span></label>
+            <input id="ctrl-gap" type="range" min="0" max="0.8" step="0.02" />
+          </div>
+          <div class="control-row">
+            <label for="ctrl-bow">Thread Curve (Bow) <span class="val" id="val-bow"></span></label>
+            <input id="ctrl-bow" type="range" min="0" max="0.24" step="0.01" />
+          </div>
+
+          <div class="control-row">
+            <label>Stitch Tip Shape</label>
+            <div class="segmented-3" id="tip-style-group">
+              <button data-tip="tapered" class="seg-btn active">Tapered</button>
+              <button data-tip="rounded" class="seg-btn">Rounded</button>
+              <button data-tip="square" class="seg-btn">Square</button>
+            </div>
+          </div>
+
+          <label class="check-row">
+            <input id="ctrl-seam-line" type="checkbox" />
+            <span>Include subtle painted seam centerline</span>
+          </label>
+          <label class="check-row">
+            <input id="ctrl-lace-holes" type="checkbox" />
+            <span>Include outer lace-hole dots</span>
+          </label>
+        </section>
+
+        <!-- Colors & Paint Blend -->
+        <section class="panel-section">
+          <div class="section-header">
+            <h2>Paint &amp; Finish</h2>
+          </div>
+
+          <div class="control-row">
+            <label>Stitch Paint Color</label>
+            <div class="swatch-row">
+              <button class="swatch" data-stitch-color="#C8102E" style="background:#C8102E" title="Classic MLB Red"></button>
+              <button class="swatch" data-stitch-color="#9E2A2B" style="background:#9E2A2B" title="Vintage Brick Red"></button>
+              <button class="swatch" data-stitch-color="#E63946" style="background:#E63946" title="Bright Scarlet"></button>
+              <button class="swatch" data-stitch-color="#1D3557" style="background:#1D3557" title="Ballpark Navy"></button>
+              <button class="swatch" data-stitch-color="#222222" style="background:#222222" title="Charcoal"></button>
+              <input id="ctrl-stitch-color" type="color" title="Custom stitch color" />
+            </div>
+          </div>
+
+          <div id="wall-color-wrap" class="control-row">
+            <label>Wall Paint Color (2D Mode)</label>
+            <div class="swatch-row">
+              <button class="swatch" data-wall-color="#FAFAFA" style="background:#FAFAFA" title="Crisp Wallpaper White"></button>
+              <button class="swatch" data-wall-color="#F5F2EB" style="background:#F5F2EB" title="Baseball Chalk Cream"></button>
+              <button class="swatch" data-wall-color="#E6E4DD" style="background:#E6E4DD" title="Warm Stone Gray"></button>
+              <button class="swatch" data-wall-color="#D9E5F0" style="background:#D9E5F0" title="Ballpark Sky Blue"></button>
+              <button class="swatch" data-wall-color="#DDE6DC" style="background:#DDE6DC" title="Soft Outfield Sage"></button>
+              <input id="ctrl-wall-color" type="color" title="Custom wall color" />
+            </div>
+          </div>
+
+          <div id="photo-blend-wrap" class="control-stack hidden">
+            <div class="control-row">
+              <label for="ctrl-opacity">Paint Opacity <span class="val" id="val-opacity"></span></label>
+              <input id="ctrl-opacity" type="range" min="0.25" max="1" step="0.02" />
+            </div>
+            <label class="check-row">
+              <input id="ctrl-multiply" type="checkbox" />
+              <span>Realistic wall lighting blend (Multiply)</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- Room Dimensions & Furniture (2D Wall Mode) -->
+        <section id="section-room-2d" class="panel-section">
+          <div class="section-header">
+            <h2>Room Wall &amp; Furniture</h2>
+          </div>
+
+          <div class="control-row two-col">
+            <div>
+              <label for="ctrl-wall-w">Wall Width (in)</label>
+              <input id="ctrl-wall-w" type="number" min="48" max="360" step="1" />
+            </div>
+            <div>
+              <label for="ctrl-wall-h">Wall Height (in)</label>
+              <input id="ctrl-wall-h" type="number" min="48" max="180" step="1" />
+            </div>
+          </div>
+          <div class="control-row two-col">
+            <div>
+              <label for="ctrl-baseboard">Baseboard (in)</label>
+              <input id="ctrl-baseboard" type="number" min="0" max="16" step="0.5" />
+            </div>
+            <div>
+              <label for="ctrl-crown">Crown Mold (in)</label>
+              <input id="ctrl-crown" type="number" min="0" max="12" step="0.5" />
+            </div>
+          </div>
+
+          <label class="check-row">
+            <input id="ctrl-mask-furniture" type="checkbox" />
+            <span>Hide stitches behind furniture</span>
+          </label>
+
+          <div class="add-obstacle-bar">
+            <select id="select-new-obstacle" aria-label="Furniture type to add">
+              <option value="bed">Twin Bed (42"×44")</option>
+              <option value="bed-full">Full Bed (56"×46")</option>
+              <option value="bed-toddler">Toddler Bed (30"×34")</option>
+              <option value="window">Window (32"×44")</option>
+              <option value="door">Door (32"×80")</option>
+              <option value="dresser">Dresser (42"×34")</option>
+              <option value="shelf">Wall Shelf (36"×6")</option>
+            </select>
+            <button id="btn-add-obstacle" class="btn btn-secondary btn-sm">+ Add</button>
+          </div>
+
+          <div id="obstacle-list" class="obstacle-list"></div>
+        </section>
+
+        <!-- Photo Overlay Controls -->
+        <section id="section-photo-mode" class="panel-section hidden">
+          <div class="section-header">
+            <h2>Room Photo &amp; Scale</h2>
+          </div>
+
+          <div class="photo-upload-box">
+            <input id="input-photo-file" type="file" accept="image/*" hidden />
+            <button id="btn-upload-photo" class="btn btn-primary btn-full">📷 Upload Son's Wall Photo</button>
+            <div class="photo-meta">
+              <span id="photo-name-label">Sample Kid Bedroom Wall</span>
+              <button id="btn-use-sample-photo" class="btn-link">Use Sample</button>
+            </div>
+          </div>
+
+          <div class="calib-card">
+            <div class="calib-header">
+              <strong>2-Point Scale Calibration</strong>
+              <span id="calib-ppi-readout" class="badge">11.1 px/in</span>
+            </div>
+            <p class="helper-tip">Click two points on a known distance (like two painter's tape marks 48" apart) to lock stitches to real inches.</p>
+            <div class="control-row two-col">
+              <div>
+                <label for="ctrl-calib-dist">Known Distance (in)</label>
+                <input id="ctrl-calib-dist" type="number" min="2" max="240" step="0.25" />
+              </div>
+              <div class="align-end">
+                <button id="btn-start-calib" class="btn btn-secondary btn-full">🎯 Calibrate Scale</button>
+              </div>
+            </div>
+            <div id="calib-status" class="calib-status hidden"></div>
+          </div>
+        </section>
+
+        <!-- Project Backup -->
+        <section class="panel-section">
+          <div class="section-header">
+            <h2>Project File</h2>
+          </div>
+          <div class="two-col">
+            <button id="btn-export-json" class="btn btn-ghost btn-sm">💾 Save JSON</button>
+            <button id="btn-import-json" class="btn btn-ghost btn-sm">📂 Load JSON</button>
+            <input id="input-json-file" type="file" accept="application/json" hidden />
+          </div>
+        </section>
+      </aside>
+
+      <!-- Main Stage & Bottom Snapshots Tray -->
+      <main class="stage-column">
+        <!-- Stage Toolbar & Live Stencil Stats -->
+        <div class="stage-bar">
+          <div class="stage-toggles">
+            <label class="chip-check"><input id="ctrl-show-grid" type="checkbox" /> Grid (1ft)</label>
+            <label class="chip-check"><input id="ctrl-show-rulers" type="checkbox" /> Rulers</label>
+            <label class="chip-check"><input id="ctrl-show-guide" type="checkbox" /> Seam Guide</label>
+          </div>
+          <div class="stats-strip" id="stats-strip">
+            <div class="stat-pill"><span class="stat-k">Stripes</span> <strong id="stat-stripes">0</strong></div>
+            <div class="stat-pill"><span class="stat-k">Stitches</span> <strong id="stat-pairs">0</strong></div>
+            <div class="stat-pill"><span class="stat-k">Band</span> <strong id="stat-band">0"</strong></div>
+            <div class="stat-pill" id="stat-bridge-pill" title="Smallest gap between stitch cutouts (keep >= 0.15&quot;–0.25&quot; for sturdy mylar/cardstock stencils)">
+              <span class="stat-k">Min Bridge</span> <strong id="stat-bridge">0"</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Canvas Area -->
+        <div class="canvas-wrap" id="canvas-wrap">
+          <canvas id="stage-canvas"></canvas>
+          <div id="canvas-hint" class="canvas-hint">Drag horizontally to shift stripes • Drag furniture to move or resize</div>
+        </div>
+
+        <!-- Saved Snapshots Tray -->
+        <div class="snapshots-bar">
+          <div class="snapshots-header">
+            <strong>Saved Snapshots</strong>
+            <span class="snapshots-sub">Save variations to compare side-by-side together</span>
+          </div>
+          <div id="snapshots-tray" class="snapshots-tray"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL: Side-by-Side & Split Comparison -->
+  <div id="modal-compare" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="compare-title">
+    <div class="modal-card modal-xl">
+      <div class="modal-header">
+        <h2 id="compare-title">Compare Designs</h2>
+        <div class="compare-mode-tabs">
+          <button id="btn-cmp-side" class="seg-btn active">Side-by-Side</button>
+          <button id="btn-cmp-split" class="seg-btn">Split Wipe Slider</button>
+        </div>
+        <button class="modal-close" data-close-modal="modal-compare" aria-label="Close">✕</button>
+      </div>
+
+      <div class="compare-selectors">
+        <div class="compare-select-box">
+          <label for="cmp-select-a">Design A (Left)</label>
+          <select id="cmp-select-a"></select>
+        </div>
+        <div class="compare-select-box">
+          <label for="cmp-select-b">Design B (Right)</label>
+          <select id="cmp-select-b"></select>
+        </div>
+      </div>
+
+      <div id="compare-view-side" class="compare-side-grid">
+        <div class="compare-pane">
+          <div class="compare-pane-label" id="cmp-label-a">Design A</div>
+          <canvas id="cmp-canvas-a" class="compare-canvas"></canvas>
+        </div>
+        <div class="compare-pane">
+          <div class="compare-pane-label" id="cmp-label-b">Design B</div>
+          <canvas id="cmp-canvas-b" class="compare-canvas"></canvas>
+        </div>
+      </div>
+
+      <div id="compare-view-split" class="compare-split-wrap hidden">
+        <canvas id="cmp-canvas-split" class="compare-split-canvas"></canvas>
+        <div class="split-slider-row">
+          <span id="cmp-split-label-a">Design A</span>
+          <input id="cmp-split-range" type="range" min="0.05" max="0.95" step="0.005" value="0.5" />
+          <span id="cmp-split-label-b">Design B</span>
+        </div>
+      </div>
+
+      <div class="compare-diff-box">
+        <h3>Key Differences</h3>
+        <div id="cmp-diff-table" class="diff-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Export 1:1 Stencil (PDF & SVG) -->
+  <div id="modal-export" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="export-title">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h2 id="export-title">Export 1:1 Physical Stencil</h2>
+        <button class="modal-close" data-close-modal="modal-export" aria-label="Close">✕</button>
+      </div>
+
+      <div class="export-grid">
+        <!-- Printable Tiled PDF Card -->
+        <div class="export-card">
+          <h3>🖨️ Printable 1:1 PDF (Home Printer)</h3>
+          <p class="export-desc">Exact 1:1 US Letter (8.5" × 11") vector PDF with alignment guides and a 2.00" ruler verification box.</p>
+
+          <div class="control-row">
+            <label for="exp-pdf-mode">Stencil Mode</label>
+            <select id="exp-pdf-mode">
+              <option value="reusable">1-Page Reusable Vertical Stencil Strip (best for straight stripes)</option>
+              <option value="single-stripe">Single Full-Height Vertical Stripe Tiled (best for curved stripes — flip for pairs!)</option>
+              <option value="tiled">Full-Wall Tiled Template (all stripes)</option>
+            </select>
+          </div>
+
+          <div id="exp-pdf-tiled-opts" class="hidden">
+            <div class="control-row two-col">
+              <div id="exp-pdf-orient-wrap">
+                <label for="exp-pdf-orient">Orientation</label>
+                <select id="exp-pdf-orient">
+                  <option value="portrait">Portrait (8.5"×11")</option>
+                  <option value="landscape">Landscape (11"×8.5")</option>
+                </select>
+              </div>
+              <div>
+                <label for="exp-pdf-overlap">Overlap (in)</label>
+                <input id="exp-pdf-overlap" type="number" min="0.25" max="1.5" step="0.25" value="0.5" />
+              </div>
+            </div>
+          </div>
+
+          <label class="check-row">
+            <input id="exp-pdf-inksaver" type="checkbox" checked />
+            <span>Ink-Saver Cut Outlines (recommended — saves red ink)</span>
+          </label>
+          <label class="check-row">
+            <input id="exp-pdf-centerline" type="checkbox" checked />
+            <span>Include dashed plumb / seam centerline guide</span>
+          </label>
+
+          <div id="exp-pdf-summary" class="export-summary"></div>
+          <button id="btn-download-pdf" class="btn btn-primary btn-full">Download 1:1 PDF</button>
+        </div>
+
+        <!-- Cutting Machine SVG Card -->
+        <div class="export-card">
+          <h3>✂️ Cutting Machine 1:1 SVG (Cricut / Silhouette)</h3>
+          <p class="export-desc">Closed filled vector cutouts at exact real-world inches — ready to cut stencil mylar or vinyl directly.</p>
+
+          <div class="control-row">
+            <label for="exp-svg-mode">SVG Layout</label>
+            <select id="exp-svg-mode">
+              <option value="tile-12x24">Reusable Vertical Strip — 12"×24" Mat (11.5"×23.5")</option>
+              <option value="tile-12x12">Reusable Vertical Strip — 12"×12" Mat (11.5"×11.5")</option>
+              <option value="tile-letter">Reusable Vertical Strip — Letter Sheet (8.5"×11")</option>
+              <option value="single-stripe">Single Full-Height Vertical Stripe (for plotter / Inkscape)</option>
+              <option value="full-wall">Full-Wall 1:1 SVG (all stripes)</option>
+            </select>
+          </div>
+
+          <label class="check-row">
+            <input id="exp-svg-outline" type="checkbox" />
+            <span>Stroke outlines only (instead of solid filled cutouts)</span>
+          </label>
+
+          <div id="exp-svg-summary" class="export-summary"></div>
+          <button id="btn-download-svg" class="btn btn-secondary btn-full">Download 1:1 SVG</button>
+        </div>
+      </div>
+
+      <div class="export-footer-tip">
+        <strong>Printing Tip:</strong> Always select <strong>"Actual Size"</strong> or <strong>"Scale: 100%"</strong> in your print dialog — never "Fit to Page" — then measure the 2.00" verification mark with a ruler before cutting.
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Tomorrow's Measurement & Photo Guide -->
+  <div id="modal-guide" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <h2 id="guide-title">📏 Tomorrow's Room Measurement &amp; Photo Checklist</h2>
+        <button class="modal-close" data-close-modal="modal-guide" aria-label="Close">✕</button>
+      </div>
+
+      <div class="guide-body">
+        <div class="guide-block">
+          <h3>1. Quick Tape-Measure Checklist (nearest 1/4")</h3>
+          <ul>
+            <li><strong>Wall Width &amp; Height:</strong> Left corner to right corner, and floor to ceiling.</li>
+            <li><strong>Trim Heights:</strong> Baseboard height (usually 3.5"–5.5") and crown molding (if any).</li>
+            <li><strong>Bed / Headboard:</strong> Distance from left wall, total width, and height from floor.</li>
+            <li><strong>Windows &amp; Doors:</strong> Distance from left wall, total width (including outer trim), sill height, and top height.</li>
+            <li><strong>Switches / Outlets / Shelves:</strong> Any wall plates you want the stripes to clear cleanly.</li>
+          </ul>
+        </div>
+
+        <div class="guide-block">
+          <h3>2. How to Take a True-Scale Wall Photo</h3>
+          <ul>
+            <li><strong>Stand centered across the room:</strong> Hold your phone level at chest height (~4 ft off the floor) facing straight at the wall.</li>
+            <li><strong>Use the standard 1x lens:</strong> Avoid 0.5x ultra-wide mode, which bows straight walls near the edges.</li>
+            <li><strong>The 48" Painter's Tape Trick (Pro Tip):</strong> Before taking the photo, stick two small pieces of painter's tape (or sticky notes) horizontally on the wall <strong>exactly 48 inches (4 ft) apart</strong>. When you upload the photo in <em>Photo Overlay</em> mode, click <strong>Calibrate Scale</strong> and tap both pieces of tape — every stripe &amp; stitch immediately locks to exact real-world size!</li>
+          </ul>
+        </div>
+
+        <div class="guide-block">
+          <h3>3. Vertical Stripe Stencil Tips</h3>
+          <ul>
+            <li>Check the <strong>Min Bridge</strong> readout: for delicate wallpaper-scale stitches, a 7–10 mil mylar stencil cut on a Cricut/Silhouette handles bridges down to <strong>~0.12"</strong>; if hand-cutting with an X-Acto knife, aim for <strong>0.20"–0.25"+</strong>.</li>
+            <li>Use a laser level (or plumb line) along the ceiling to mark stripe centers every <em>Stripe Spacing</em> inches, and align the dashed blue ghost stitch at the top of your stencil over the last painted stitch as you move down each column.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-primary" data-close-modal="modal-guide">Got It!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

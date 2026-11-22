@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Baseball Stitch Stencil Designer — Automated Test Suite</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 860px; margin: 0 auto; background: #f8fafc; color: #0f172a; }
+    h1 { margin-top: 0; }
+    .summary { padding: 12px 16px; border-radius: 8px; font-weight: 700; margin-bottom: 16px; }
+    .summary.pass { background: #dcfce7; color: #166534; }
+    .summary.fail { background: #fee2e2; color: #991b1b; }
+    .test { padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; background: #fff; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; }
+    .test.pass { border-left: 4px solid #16a34a; }
+    .test.fail { border-left: 4px solid #dc2626; }
+    .err { color: #b91c1c; font-size: 12px; margin-top: 4px; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>Baseball Stitch Stencil Designer — Automated Self-Tests</h1>
+  <div id="summary" class="summary">Running tests...</div>
+  <div id="results"></div>
+
+  <script type="module">
+    import { computeDesignGeometry, buildReusableStencilTile, buildSingleFullHeightStripe, dist } from '../js/geometry.js';
+    import { createDefaultState, STARTER_PRESETS, applyPresetToState, diffConfigs } from '../js/presets.js';
+    import { generateFullWallSVG, generateReusableTileSVG, generateSingleStripeSVG } from '../js/svg-export.js';
+    import { computeSingleStripePdfPlan, generateSingleStripePDF, generateReusableStripPDF } from '../js/pdf-export.js';
+
+    const results = [];
+
+    function assert(cond, msg) {
+      if (!cond) throw new Error(msg || 'Assertion failed');
+    }
+
+    function test(name, fn) {
+      try {
+        fn();
+        results.push({ name, passed: true });
+      } catch (err) {
+        results.push({ name, passed: false, error: err.message });
+      }
+    }
+
+    test('Exactly 2 starter presets exist: Straight vertical stitches & Curved baseball stitches', () => {
+      assert(STARTER_PRESETS.length === 2, `Expected 2 presets, got ${STARTER_PRESETS.length}`);
+      assert(STARTER_PRESETS[0].name === 'Straight vertical stitches', 'Preset 1 name mismatch');
+      assert(STARTER_PRESETS[1].name === 'Curved baseball stitches', 'Preset 2 name mismatch');
+    });
+
+    test('Both presets generate valid repeating vertical stripes with closed stitch polygons', () => {
+      const base = createDefaultState();
+      for (const preset of STARTER_PRESETS) {
+        const cfg = applyPresetToState(base, preset.id);
+        const geom = computeDesignGeometry(cfg);
+        assert(geom.stats.stripeCount >= 8, `Preset ${preset.id} had too few stripes: ${geom.stats.stripeCount}`);
+        assert(geom.stats.perStripePairs >= 50, `Preset ${preset.id} had too few stitches per stripe`);
+        assert(geom.stats.minBridgeIn > 0.08, `Preset ${preset.id} bridge unexpectedly low: ${geom.stats.minBridgeIn}`);
+      }
+    });
+
+    test('Curved baseball stripes maintain uniform arc-length stitch spacing', () => {
+      const cfg = applyPresetToState(createDefaultState(), 'curved-baseball');
+      cfg.stitch.spacingIn = 1.0;
+      const geom = computeDesignGeometry(cfg);
+      const pairs = geom.seams[0].pairs;
+      for (let i = 1; i < pairs.length; i++) {
+        const chord = dist(pairs[i - 1].stationPos, pairs[i].stationPos);
+        assert(chord > 0.96 && chord <= 1.02, `Non-uniform spacing at ${i}: ${chord.toFixed(3)}"`);
+      }
+    });
+
+    test('Opposing curved stripes mirror curveSign between adjacent stripes', () => {
+      const cfg = applyPresetToState(createDefaultState(), 'curved-baseball');
+      const geom = computeDesignGeometry(cfg);
+      assert(geom.seams.length >= 2, 'Expected at least 2 stripes');
+      assert(geom.seams[0].curveSign !== geom.seams[1].curveSign, 'Adjacent opposing stripes should have opposite curveSign');
+    });
+
+    test('Reusable vertical stencil strip generates active cutouts + top/bottom blue alignment ghosts', () => {
+      const cfg = createDefaultState();
+      const tile = buildReusableStencilTile(cfg, 8.5, 11.0, 0.85);
+      assert(tile.activePairs.length >= 8, `Expected >= 8 vertical stitches on Letter strip, got ${tile.activePairs.length}`);
+      assert(tile.ghostPairs.length === 2, 'Expected 2 alignment ghost stitches (top & bottom)');
+    });
+
+    test('1:1 SVG exports (Reusable Strip, Single Full-Height Stripe, Full Wall) parse cleanly with inch units', () => {
+      const cfg = applyPresetToState(createDefaultState(), 'curved-baseball');
+      const parser = new DOMParser();
+
+      const tile = generateReusableTileSVG(cfg, { sheetWidthIn: 11.5, sheetHeightIn: 23.5 });
+      const docTile = parser.parseFromString(tile.svg, 'image/svg+xml');
+      assert(!docTile.querySelector('parsererror'), 'Tile SVG XML error');
+      assert(docTile.documentElement.getAttribute('width') === '11.5in', 'Unexpected tile SVG width');
+
+      const single = generateSingleStripeSVG(cfg);
+      const docSingle = parser.parseFromString(single.svg, 'image/svg+xml');
+      assert(!docSingle.querySelector('parsererror'), 'Single stripe SVG XML error');
+
+      const full = generateFullWallSVG(cfg);
+      const docFull = parser.parseFromString(full.svg, 'image/svg+xml');
+      assert(!docFull.querySelector('parsererror'), 'Full wall SVG XML error');
+      assert(docFull.documentElement.getAttribute('width') === '144in', 'Unexpected full SVG width');
+    });
+
+    test('1:1 Single Full-Height Stripe PDF & Reusable Strip PDF generate valid PDF 1.4 with 2.00" scale check', () => {
+      const cfgCurved = applyPresetToState(createDefaultState(), 'curved-baseball');
+      const plan = computeSingleStripePdfPlan(cfgCurved);
+      assert(plan.activeTiles.length >= 8 && plan.activeTiles.length <= 15, `Unexpected stripe tile count: ${plan.activeTiles.length}`);
+
+      const singlePdf = generateSingleStripePDF(cfgCurved, { inkSaver: true });
+      const textSingle = new TextDecoder('latin1').decode(singlePdf.bytes);
+      assert(textSingle.startsWith('%PDF-1.4\n'), 'Missing PDF 1.4 header');
+      assert(textSingle.includes('Exact 2.00" x 2.00"'), 'Missing 2.00" scale box');
+      assert(textSingle.trim().endsWith('%%EOF'), 'Missing %%EOF');
+
+      const stripPdf = generateReusableStripPDF(createDefaultState(), { inkSaver: true });
+      const textStrip = new TextDecoder('latin1').decode(stripPdf.bytes);
+      assert(stripPdf.pageCount === 1, 'Expected 1 page for reusable strip');
+      assert(textStrip.includes('/MediaBox [0 0 612 792]'), 'Expected Portrait Letter MediaBox [0 0 612 792]');
+      assert(textStrip.includes('Exact 2.00" Scale Check'), 'Missing 2.00" scale bar');
+    });
+
+    test('diffConfigs compares Straight vs Curved presets accurately', () => {
+      const a = applyPresetToState(createDefaultState(), 'straight-vertical');
+      const b = applyPresetToState(createDefaultState(), 'curved-baseball');
+      const diffs = diffConfigs(a, b);
+      assert(diffs.some((d) => d.label === 'Pattern'), 'Expected Pattern diff');
+      assert(diffs.some((d) => d.label === 'Curve Amount'), 'Expected Curve Amount diff');
+    });
+
+    const passedCount = results.filter((r) => r.passed).length;
+    const allPass = passedCount === results.length;
+    const summaryEl = document.getElementById('summary');
+    summaryEl.textContent = allPass
+      ? `ALL ${passedCount}/${results.length} TESTS PASSED`
+      : `${passedCount}/${results.length} TESTS PASSED (${results.length - passedCount} FAILED)`;
+    summaryEl.className = `summary ${allPass ? 'pass' : 'fail'}`;
+
+    const resEl = document.getElementById('results');
+    for (const r of results) {
+      const div = document.createElement('div');
+      div.className = `test ${r.passed ? 'pass' : 'fail'}`;
+      div.innerHTML = `<div><strong>${r.name}</strong>${r.error ? `<div class="err">${r.error}</div>` : ''}</div><span>${r.passed ? 'PASS' : 'FAIL'}</span>`;
+      resEl.appendChild(div);
+    }
+
+    window.__TEST_RESULTS__ = { passedCount, total: results.length, allPass, results };
+  </script>
+</body>
+</html>
