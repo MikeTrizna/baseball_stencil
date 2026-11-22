@@ -195,10 +195,10 @@ function syncControlsFromState() {
   $('ctrl-curve-amp').value = state.layout.curveAmplitudeIn ?? 2.25;
   $('val-curve-amp').textContent = fmtDim(state.layout.curveAmplitudeIn ?? 2.25, 2);
 
-  const cycles = state.layout.curveCycles ?? 0.5;
+  const cycles = state.layout.curveCycles ?? 2;
   $('ctrl-curve-cycles').value = cycles;
-  const cycleLabel = cycles === 0.5 ? '0.5 (Single Arc)' : cycles === 1 ? '1.0 (S-Wave)' : `${cycles.toFixed(2)} waves`;
-  $('val-curve-cycles').textContent = cycleLabel;
+  const cycleText = Number(cycles).toFixed(2).replace(/\.?0+$/, '');
+  $('val-curve-cycles').textContent = `${cycleText} waves`;
 
   document.querySelectorAll('#curve-style-group .seg-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.curveStyle === (state.layout.curveStyle || 'opposing'));

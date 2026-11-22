@@ -59,7 +59,7 @@ export function generateSeamPolylines(config) {
   const spacing = clamp(layout.stripeSpacingIn ?? 12, 3, 72);
   const offsetX = layout.offsetX || 0;
   const amp = isCurved ? clamp(layout.curveAmplitudeIn ?? 2.0, 0, 12) : 0;
-  const cycles = isCurved ? clamp(layout.curveCycles ?? 0.5, 0.25, 4.0) : 0.5;
+  const cycles = isCurved ? clamp(layout.curveCycles ?? 2.0, 0.25, 12.0) : 2.0;
   const opposing = isCurved && (layout.curveStyle || 'opposing') === 'opposing';
   const phaseRad = ((layout.curvePhaseDeg || 0) * DEG_TO_RAD);
 
@@ -68,7 +68,7 @@ export function generateSeamPolylines(config) {
 
   const stripes = computeStripePositions(W, spacing, offsetX);
   const seams = [];
-  const samples = isCurved ? Math.max(90, Math.round(cycles * 120)) : 24;
+  const samples = isCurved ? Math.max(120, Math.round(cycles * 90)) : 24;
 
   for (const st of stripes) {
     // Reject stripes completely off-wall even accounting for curve amplitude + stitch width
@@ -610,7 +610,7 @@ export function buildReusableStencilTile(config, sheetWidthIn, sheetHeightIn, ma
   const wallSpanH = Math.max(12, bottomY - topY);
 
   const amp = isCurved ? clamp(layout.curveAmplitudeIn ?? 2.0, 0, Math.max(0.5, (sheetWidthIn - 2 * marginIn) * 0.42)) : 0;
-  const cycles = isCurved ? clamp(layout.curveCycles ?? 0.5, 0.25, 4.0) : 0.5;
+  const cycles = isCurved ? clamp(layout.curveCycles ?? 2.0, 0.25, 12.0) : 2.0;
   const phaseRad = (layout.curvePhaseDeg || 0) * DEG_TO_RAD;
 
   // Build centerline vertically down the center of the sheet

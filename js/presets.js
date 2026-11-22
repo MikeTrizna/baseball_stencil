@@ -27,7 +27,7 @@ export function createDefaultState() {
       stripeSpacingIn: 12, // Distance between vertical stripes (in)
       offsetX: 0,
       curveAmplitudeIn: 2.25, // Horizontal bow/curve of each stripe (in)
-      curveCycles: 0.5, // 0.5 = single baseball arc floor-to-ceiling, 1.0 = S-curve, 1.5+ = repeating pods
+      curveCycles: 2, // Repeating baseball-seam waves from ceiling to floor
       curveStyle: 'opposing', // 'opposing' | 'parallel'
       curvePhaseDeg: 0,
       flipDirection: false, // false = Vs pointing downward like inspiration wallpaper
@@ -125,7 +125,7 @@ export const STARTER_PRESETS = [
         stripeSpacingIn: 13,
         offsetX: 0,
         curveAmplitudeIn: 2.25,
-        curveCycles: 0.5,
+        curveCycles: 2,
         curveStyle: 'opposing',
         curvePhaseDeg: 0,
         flipDirection: false,
