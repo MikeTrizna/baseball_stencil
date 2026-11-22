@@ -6,6 +6,11 @@ import {
   computeDesignGeometry,
   buildReusableStencilTile,
   buildSingleFullHeightStripe,
+  getPaintedWallSpanIn,
+  computeMlbCurveForSpacing,
+  computeMlbAmplitudeForCycles,
+  computeMlbCyclesForAmplitude,
+  computeCurveMetrics,
   clamp,
 } from './geometry.js';
 import {
@@ -192,13 +197,32 @@ function syncControlsFromState() {
   $('ctrl-offset-x').value = state.layout.offsetX || 0;
   $('val-offset-x').textContent = fmtDim(state.layout.offsetX || 0, 1);
 
-  $('ctrl-curve-amp').value = state.layout.curveAmplitudeIn ?? 2.25;
-  $('val-curve-amp').textContent = fmtDim(state.layout.curveAmplitudeIn ?? 2.25, 2);
+  $('ctrl-curve-amp').value = state.layout.curveAmplitudeIn ?? 1.95;
+  $('val-curve-amp').textContent = fmtDim(state.layout.curveAmplitudeIn ?? 1.95, 2);
 
-  const cycles = state.layout.curveCycles ?? 2;
+  const cycles = state.layout.curveCycles ?? 2.55;
   $('ctrl-curve-cycles').value = cycles;
   const cycleText = Number(cycles).toFixed(2).replace(/\.?0+$/, '');
   $('val-curve-cycles').textContent = `${cycleText} waves`;
+
+  $('ctrl-lock-mlb').checked = Boolean(state.layout.lockBaseballCurve);
+  if (isCurved) {
+    const metrics = computeCurveMetrics(state.layout, state.wall);
+    const gapText = metrics.opposing
+      ? `Gap ${fmtDim(metrics.minGapIn, 1)}–${fmtDim(metrics.maxGapIn, 1)} (${Math.round(metrics.pinchRatioPct)}%) • ${Math.round(metrics.maxTiltDeg)}°`
+      : `Wave ${fmtDim(metrics.waveHeightIn, 1)} • ${Math.round(metrics.maxTiltDeg)}°`;
+    const badgeClass = metrics.isMlbMatch
+      ? 'mlb-badge mlb-badge-match'
+      : metrics.isMlbTilt
+        ? 'mlb-badge mlb-badge-sweep'
+        : 'mlb-badge mlb-badge-custom';
+    const badgeLabel = metrics.isMlbMatch
+      ? 'MLB Match'
+      : metrics.isMlbTilt
+        ? 'MLB Curve'
+        : 'Custom';
+    $('mlb-curve-readout').innerHTML = `<span>${gapText}</span><span class="${badgeClass}">${badgeLabel}</span>`;
+  }
 
   document.querySelectorAll('#curve-style-group .seg-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.curveStyle === (state.layout.curveStyle || 'opposing'));
@@ -639,6 +663,12 @@ function setupCanvasInteractions() {
           const imgH = img.naturalHeight || img.height;
           state.wall.widthIn = Number((imgW / state.photo.pixelsPerInch).toFixed(1));
           state.wall.heightIn = Number((imgH / state.photo.pixelsPerInch).toFixed(1));
+          if (state.layout.type === 'curved-stripes' && state.layout.lockBaseballCurve) {
+            state.layout.curveCycles = computeMlbCyclesForAmplitude(
+              state.layout.curveAmplitudeIn,
+              getPaintedWallSpanIn(state.wall)
+            );
+          }
           state.photo.originPxX = 0;
           state.photo.originPxY = 0;
           calibrationMode = false;
@@ -783,6 +813,11 @@ function bindControls() {
     btn.addEventListener('click', () => {
       mutateState((s) => {
         s.layout.type = btn.dataset.layout;
+        if (s.layout.type === 'curved-stripes' && s.layout.lockBaseballCurve) {
+          const mlb = computeMlbCurveForSpacing(s.layout.stripeSpacingIn, getPaintedWallSpanIn(s.wall));
+          s.layout.curveAmplitudeIn = mlb.curveAmplitudeIn;
+          s.layout.curveCycles = mlb.curveCycles;
+        }
         s.activePresetId = null;
       });
     });
@@ -792,10 +827,53 @@ function bindControls() {
     mutateState((s) => { s.layout.offsetX = 0; });
   });
 
-  bindRange('ctrl-stripe-spacing', (v) => { state.layout.stripeSpacingIn = v; });
+  $('ctrl-lock-mlb').addEventListener('change', (e) => {
+    const locked = e.target.checked;
+    mutateState((s) => {
+      s.layout.lockBaseballCurve = locked;
+      if (locked) {
+        const mlb = computeMlbCurveForSpacing(s.layout.stripeSpacingIn, getPaintedWallSpanIn(s.wall));
+        s.layout.curveAmplitudeIn = mlb.curveAmplitudeIn;
+        s.layout.curveCycles = mlb.curveCycles;
+      }
+      s.activePresetId = null;
+    });
+    if (locked) {
+      showToast('Locked to official MLB baseball curve proportions');
+    }
+  });
+
+  $('btn-snap-mlb').addEventListener('click', () => {
+    mutateState((s) => {
+      const mlb = computeMlbCurveForSpacing(s.layout.stripeSpacingIn, getPaintedWallSpanIn(s.wall));
+      s.layout.curveAmplitudeIn = mlb.curveAmplitudeIn;
+      s.layout.curveCycles = mlb.curveCycles;
+      s.activePresetId = null;
+    });
+    showToast('Snapped curve to official MLB proportions for current spacing');
+  });
+
+  bindRange('ctrl-stripe-spacing', (v) => {
+    state.layout.stripeSpacingIn = v;
+    if (state.layout.type === 'curved-stripes' && state.layout.lockBaseballCurve) {
+      const mlb = computeMlbCurveForSpacing(v, getPaintedWallSpanIn(state.wall));
+      state.layout.curveAmplitudeIn = mlb.curveAmplitudeIn;
+      state.layout.curveCycles = mlb.curveCycles;
+    }
+  });
   bindRange('ctrl-offset-x', (v) => { state.layout.offsetX = v; });
-  bindRange('ctrl-curve-amp', (v) => { state.layout.curveAmplitudeIn = v; });
-  bindRange('ctrl-curve-cycles', (v) => { state.layout.curveCycles = v; });
+  bindRange('ctrl-curve-amp', (v) => {
+    state.layout.curveAmplitudeIn = v;
+    if (state.layout.lockBaseballCurve) {
+      state.layout.curveCycles = computeMlbCyclesForAmplitude(v, getPaintedWallSpanIn(state.wall));
+    }
+  });
+  bindRange('ctrl-curve-cycles', (v) => {
+    state.layout.curveCycles = v;
+    if (state.layout.lockBaseballCurve) {
+      state.layout.curveAmplitudeIn = computeMlbAmplitudeForCycles(v, getPaintedWallSpanIn(state.wall));
+    }
+  });
 
   document.querySelectorAll('#curve-style-group .seg-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -852,10 +930,27 @@ function bindControls() {
   $('ctrl-multiply').addEventListener('change', (e) => mutateState((s) => { s.stitch.multiplyBlend = e.target.checked; }));
 
   // Room dimensions
+  const syncWallHeightMlbCurve = (s) => {
+    if (s.layout.type === 'curved-stripes' && s.layout.lockBaseballCurve) {
+      s.layout.curveCycles = computeMlbCyclesForAmplitude(
+        s.layout.curveAmplitudeIn,
+        getPaintedWallSpanIn(s.wall)
+      );
+    }
+  };
   $('ctrl-wall-w').addEventListener('change', (e) => mutateState((s) => { s.wall.widthIn = clamp(parseFloat(e.target.value) || 144, 48, 360); }));
-  $('ctrl-wall-h').addEventListener('change', (e) => mutateState((s) => { s.wall.heightIn = clamp(parseFloat(e.target.value) || 96, 48, 180); }));
-  $('ctrl-baseboard').addEventListener('change', (e) => mutateState((s) => { s.wall.baseboardIn = clamp(parseFloat(e.target.value) || 0, 0, 16); }));
-  $('ctrl-crown').addEventListener('change', (e) => mutateState((s) => { s.wall.crownIn = clamp(parseFloat(e.target.value) || 0, 0, 12); }));
+  $('ctrl-wall-h').addEventListener('change', (e) => mutateState((s) => {
+    s.wall.heightIn = clamp(parseFloat(e.target.value) || 96, 48, 180);
+    syncWallHeightMlbCurve(s);
+  }));
+  $('ctrl-baseboard').addEventListener('change', (e) => mutateState((s) => {
+    s.wall.baseboardIn = clamp(parseFloat(e.target.value) || 0, 0, 16);
+    syncWallHeightMlbCurve(s);
+  }));
+  $('ctrl-crown').addEventListener('change', (e) => mutateState((s) => {
+    s.wall.crownIn = clamp(parseFloat(e.target.value) || 0, 0, 12);
+    syncWallHeightMlbCurve(s);
+  }));
   $('ctrl-mask-furniture').addEventListener('change', (e) => mutateState((s) => { s.maskBehindFurniture = e.target.checked; }));
 
   // Add furniture obstacle

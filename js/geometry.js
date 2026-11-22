@@ -7,12 +7,96 @@
 
 const DEG_TO_RAD = Math.PI / 180;
 
+/**
+ * Official MLB baseball cover proportions (9.125" circumference, 1-3/16" waist, ~2.30" lobe):
+ *  - Single-seam curve amplitude ≈ 15% of stripe spacing (pinch ~70%, wide ~130% → ~54% narrow/wide ratio)
+ *  - One full wave height (pinch → wide → pinch) ≈ 2.75× stripe spacing
+ *  - Steepness ratio (amplitude / wavelength) ≈ 0.15 / 2.75 ≈ 5.45% (~19° max curve tilt from vertical)
+ */
+export const MLB_CURVE_AMP_RATIO = 0.15;
+export const MLB_CURVE_WAVELENGTH_RATIO = 2.75;
+export const MLB_CURVE_STEEPNESS_RATIO = MLB_CURVE_AMP_RATIO / MLB_CURVE_WAVELENGTH_RATIO;
+
+function roundToStep(val, step) {
+  return Math.round(val / step) * step;
+}
+
 export function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
 }
 
 export function dist(a, b) {
   return Math.hypot(b[0] - a[0], b[1] - a[1]);
+}
+
+/**
+ * Compute the painted vertical span of the wall in inches (accounting for trim if clipped).
+ */
+export function getPaintedWallSpanIn(wall) {
+  const H = wall?.heightIn || 96;
+  const topY = wall?.clipStitchesToTrim ? (wall.crownIn || 0) : 0;
+  const bottomY = wall?.clipStitchesToTrim ? H - (wall.baseboardIn || 0) : H;
+  return Math.max(12, bottomY - topY);
+}
+
+/**
+ * Compute official-MLB-ratio Curve Amount & Curve Waves for a given stripe spacing and painted wall height.
+ */
+export function computeMlbCurveForSpacing(stripeSpacingIn, wallSpanIn) {
+  const S = clamp(stripeSpacingIn ?? 13, 3, 72);
+  const H = Math.max(12, wallSpanIn ?? 91.5);
+  const waveHeightIn = S * MLB_CURVE_WAVELENGTH_RATIO;
+  const curveAmplitudeIn = Number(clamp(roundToStep(S * MLB_CURVE_AMP_RATIO, 0.05), 0.25, 6.0).toFixed(2));
+  const curveCycles = Number(clamp(roundToStep(H / waveHeightIn, 0.05), 0.75, 8.0).toFixed(2));
+  return { curveAmplitudeIn, curveCycles };
+}
+
+/**
+ * Given Curve Waves and painted wall height, compute the Curve Amount that preserves the ~19° MLB sweep.
+ */
+export function computeMlbAmplitudeForCycles(curveCycles, wallSpanIn) {
+  const c = clamp(curveCycles ?? 2.5, 0.25, 12.0);
+  const H = Math.max(12, wallSpanIn ?? 91.5);
+  const rawAmp = (MLB_CURVE_STEEPNESS_RATIO * H) / c;
+  return Number(clamp(roundToStep(rawAmp, 0.05), 0.25, 6.0).toFixed(2));
+}
+
+/**
+ * Given Curve Amount and painted wall height, compute the Curve Waves that preserves the ~19° MLB sweep.
+ */
+export function computeMlbCyclesForAmplitude(curveAmplitudeIn, wallSpanIn) {
+  const A = clamp(curveAmplitudeIn ?? 1.95, 0.1, 12.0);
+  const H = Math.max(12, wallSpanIn ?? 91.5);
+  const rawCycles = (MLB_CURVE_STEEPNESS_RATIO * H) / A;
+  return Number(clamp(roundToStep(rawCycles, 0.05), 0.75, 8.0).toFixed(2));
+}
+
+/**
+ * Compute human-readable baseball curve metrics (pinch/wide gaps, pinch ratio, wave height, max tilt angle).
+ */
+export function computeCurveMetrics(layout, wall) {
+  const S = clamp(layout?.stripeSpacingIn ?? 13, 3, 72);
+  const A = clamp(layout?.curveAmplitudeIn ?? 1.95, 0, 12);
+  const cycles = clamp(layout?.curveCycles ?? 2.55, 0.25, 12);
+  const H = getPaintedWallSpanIn(wall);
+  const waveHeightIn = H / cycles;
+  const maxTiltDeg = Math.atan((2 * Math.PI * A) / Math.max(1e-6, waveHeightIn)) * (180 / Math.PI);
+  const opposing = (layout?.curveStyle || 'opposing') === 'opposing';
+  const minGapIn = opposing ? Math.max(0, S - 2 * A) : S;
+  const maxGapIn = opposing ? S + 2 * A : S;
+  const pinchRatioPct = maxGapIn > 0 ? (minGapIn / maxGapIn) * 100 : 0;
+  const tiltOk = maxTiltDeg >= 16.5 && maxTiltDeg <= 21.5;
+  const pinchOk = !opposing || (pinchRatioPct >= 46 && pinchRatioPct <= 62);
+  return {
+    waveHeightIn,
+    maxTiltDeg,
+    opposing,
+    minGapIn,
+    maxGapIn,
+    pinchRatioPct,
+    isMlbMatch: tiltOk && pinchOk,
+    isMlbTilt: tiltOk,
+  };
 }
 
 /**
@@ -52,8 +136,7 @@ export function generateSeamPolylines(config) {
   const W = wall.widthIn;
   const H = wall.heightIn;
   const topY = wall.clipStitchesToTrim ? (wall.crownIn || 0) : 0;
-  const bottomY = wall.clipStitchesToTrim ? H - (wall.baseboardIn || 0) : H;
-  const spanH = Math.max(12, bottomY - topY);
+  const spanH = getPaintedWallSpanIn(wall);
 
   const isCurved = layout.type === 'curved-stripes';
   const spacing = clamp(layout.stripeSpacingIn ?? 12, 3, 72);
@@ -605,9 +688,7 @@ export function buildReusableStencilTile(config, sheetWidthIn, sheetHeightIn, ma
   const availH = Math.max(4, sheetHeightIn - 2 * marginIn);
 
   const isCurved = layout.type === 'curved-stripes' && (layout.curveAmplitudeIn || 0) > 0.05;
-  const topY = wall.clipStitchesToTrim ? (wall.crownIn || 0) : 0;
-  const bottomY = wall.clipStitchesToTrim ? wall.heightIn - (wall.baseboardIn || 0) : wall.heightIn;
-  const wallSpanH = Math.max(12, bottomY - topY);
+  const wallSpanH = getPaintedWallSpanIn(wall);
 
   const amp = isCurved ? clamp(layout.curveAmplitudeIn ?? 2.0, 0, Math.max(0.5, (sheetWidthIn - 2 * marginIn) * 0.42)) : 0;
   const cycles = isCurved ? clamp(layout.curveCycles ?? 2.0, 0.25, 12.0) : 2.0;

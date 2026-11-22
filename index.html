@@ -74,13 +74,24 @@
           </div>
 
           <div id="layout-controls-curved" class="control-stack hidden">
+            <div class="mlb-lock-box">
+              <div class="mlb-lock-top">
+                <label class="check-row mlb-lock-check">
+                  <input id="ctrl-lock-mlb" type="checkbox" checked />
+                  <span>⚾ Lock to MLB baseball curve</span>
+                </label>
+                <button id="btn-snap-mlb" type="button" class="btn-link" title="Snap Curve Amount and Curve Waves to official MLB proportions for your current Stripe Spacing">Reset</button>
+              </div>
+              <div class="mlb-readout" id="mlb-curve-readout"></div>
+            </div>
+
             <div class="control-row">
               <label for="ctrl-curve-amp">Curve Amount <span class="val" id="val-curve-amp"></span></label>
-              <input id="ctrl-curve-amp" type="range" min="0.25" max="6" step="0.1" />
+              <input id="ctrl-curve-amp" type="range" min="0.25" max="6" step="0.05" />
             </div>
             <div class="control-row">
               <label for="ctrl-curve-cycles">Curve Waves (Top → Bottom) <span class="val" id="val-curve-cycles"></span></label>
-              <input id="ctrl-curve-cycles" type="range" min="2" max="8" step="0.25" />
+              <input id="ctrl-curve-cycles" type="range" min="0.75" max="8" step="0.05" />
             </div>
             <div class="control-row">
               <label>Curve Pairing</label>

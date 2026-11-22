@@ -3,6 +3,8 @@
  * default state factory, and snapshot comparison diff utility.
  */
 
+import { getPaintedWallSpanIn, computeMlbCurveForSpacing } from './geometry.js';
+
 export function createDefaultState() {
   return {
     version: 2,
@@ -26,8 +28,9 @@ export function createDefaultState() {
       type: 'straight-stripes', // 'straight-stripes' | 'curved-stripes'
       stripeSpacingIn: 12, // Distance between vertical stripes (in)
       offsetX: 0,
-      curveAmplitudeIn: 2.25, // Horizontal bow/curve of each stripe (in)
-      curveCycles: 2, // Repeating baseball-seam waves from ceiling to floor
+      curveAmplitudeIn: 1.8, // Official MLB ~15% of stripe spacing (in)
+      curveCycles: 2.75, // Official MLB ~2.75x wavelength on 91.5" painted wall
+      lockBaseballCurve: true, // Keep Curve Amount & Waves locked to authentic MLB baseball proportions
       curveStyle: 'opposing', // 'opposing' | 'parallel'
       curvePhaseDeg: 0,
       flipDirection: false, // false = Vs pointing downward like inspiration wallpaper
@@ -118,14 +121,15 @@ export const STARTER_PRESETS = [
   {
     id: 'curved-baseball',
     name: 'Curved baseball stitches',
-    tagline: 'Vertical stitch stripes with opposing baseball-seam curves',
+    tagline: 'Vertical stitch stripes with official MLB baseball-seam proportions',
     patch: {
       layout: {
         type: 'curved-stripes',
         stripeSpacingIn: 13,
         offsetX: 0,
-        curveAmplitudeIn: 2.25,
-        curveCycles: 2,
+        curveAmplitudeIn: 1.95,
+        curveCycles: 2.55,
+        lockBaseballCurve: true,
         curveStyle: 'opposing',
         curvePhaseDeg: 0,
         flipDirection: false,
@@ -158,6 +162,11 @@ export function applyPresetToState(state, presetId) {
   }
   if (preset.patch.stitch) {
     next.stitch = { ...next.stitch, ...structuredClone(preset.patch.stitch) };
+  }
+  if (next.layout.type === 'curved-stripes' && next.layout.lockBaseballCurve) {
+    const mlb = computeMlbCurveForSpacing(next.layout.stripeSpacingIn, getPaintedWallSpanIn(next.wall));
+    next.layout.curveAmplitudeIn = mlb.curveAmplitudeIn;
+    next.layout.curveCycles = mlb.curveCycles;
   }
   return next;
 }

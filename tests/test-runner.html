@@ -21,7 +21,17 @@
   <div id="results"></div>
 
   <script type="module">
-    import { computeDesignGeometry, buildReusableStencilTile, buildSingleFullHeightStripe, dist } from '../js/geometry.js';
+    import {
+      computeDesignGeometry,
+      buildReusableStencilTile,
+      buildSingleFullHeightStripe,
+      getPaintedWallSpanIn,
+      computeMlbCurveForSpacing,
+      computeMlbAmplitudeForCycles,
+      computeMlbCyclesForAmplitude,
+      computeCurveMetrics,
+      dist,
+    } from '../js/geometry.js';
     import { createDefaultState, STARTER_PRESETS, applyPresetToState, diffConfigs } from '../js/presets.js';
     import { encodeStateToHash, decodeStateFromHash } from '../js/storage.js';
     import { generateFullWallSVG, generateReusableTileSVG, generateSingleStripeSVG } from '../js/svg-export.js';
@@ -143,6 +153,39 @@
       assert(decoded.layout.curveAmplitudeIn === 3.1, 'Decoded curveAmplitudeIn mismatch');
       assert(decoded.stitch.lengthIn === 0.85, 'Decoded stitch length mismatch');
       assert(decodeStateFromHash('#d=!!!invalid', createDefaultState()) === null, 'Invalid hash should return null');
+    });
+
+    test('Official MLB baseball curve lock maintains authentic ~19° sweep and ~54% pinch ratio', () => {
+      const cfg = applyPresetToState(createDefaultState(), 'curved-baseball');
+      assert(cfg.layout.lockBaseballCurve === true, 'Curved preset should enable MLB lock by default');
+      const mDefault = computeCurveMetrics(cfg.layout, cfg.wall);
+      assert(mDefault.isMlbMatch, `Default curved preset should be MLB Match (got ${mDefault.maxTiltDeg.toFixed(1)}°, ${mDefault.pinchRatioPct.toFixed(1)}%)`);
+      assert(mDefault.maxTiltDeg >= 18 && mDefault.maxTiltDeg <= 20, `Expected ~19° curve tilt, got ${mDefault.maxTiltDeg.toFixed(2)}°`);
+      assert(mDefault.pinchRatioPct >= 52 && mDefault.pinchRatioPct <= 56, `Expected ~54% pinch ratio, got ${mDefault.pinchRatioPct.toFixed(1)}%`);
+
+      // Changing stripe spacing updates both amplitude & waves to stay an MLB Match
+      const span = getPaintedWallSpanIn(cfg.wall);
+      for (const spacing of [10, 12, 14, 16]) {
+        const mlb = computeMlbCurveForSpacing(spacing, span);
+        const m = computeCurveMetrics({ ...cfg.layout, stripeSpacingIn: spacing, ...mlb }, cfg.wall);
+        assert(m.isMlbMatch, `Expected MLB Match at ${spacing}" spacing`);
+      }
+
+      // Changing Curve Waves or Curve Amount inversely preserves ~19° MLB sweep
+      const ampFor4Waves = computeMlbAmplitudeForCycles(4.0, span);
+      const mWave = computeCurveMetrics({ ...cfg.layout, curveCycles: 4.0, curveAmplitudeIn: ampFor4Waves }, cfg.wall);
+      assert(mWave.isMlbTilt, `Expected ~19° sweep at 4 waves, got ${mWave.maxTiltDeg.toFixed(1)}°`);
+
+      const cyclesFor25Amp = computeMlbCyclesForAmplitude(2.5, span);
+      const mAmp = computeCurveMetrics({ ...cfg.layout, curveAmplitudeIn: 2.5, curveCycles: cyclesFor25Amp }, cfg.wall);
+      assert(mAmp.isMlbTilt, `Expected ~19° sweep at 2.5" amp, got ${mAmp.maxTiltDeg.toFixed(1)}°`);
+
+      // Preset adapts automatically to a taller 9-ft (108") wall
+      const tall = createDefaultState();
+      tall.wall.heightIn = 108;
+      const tallCurved = applyPresetToState(tall, 'curved-baseball');
+      assert(tallCurved.layout.curveCycles > cfg.layout.curveCycles, 'Taller wall should produce more curve waves');
+      assert(computeCurveMetrics(tallCurved.layout, tallCurved.wall).isMlbMatch, 'Tall wall preset should still be MLB Match');
     });
 
     const passedCount = results.filter((r) => r.passed).length;
