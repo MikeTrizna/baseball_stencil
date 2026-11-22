@@ -745,6 +745,316 @@ export function renderStage(canvas, state, options = {}) {
 }
 
 /**
+ * Render a crisp, zoomed-in macro close-up of the center stripe's stitches
+ * with a fine drafting grid, scale bar, and blueprint-style Band & Pitch callouts.
+ * Returns { pxPerIn, viewWidthIn, viewHeightIn }.
+ */
+export function renderStitchZoom(canvas, state, geomOverride = null) {
+  if (!canvas) return null;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || canvas.width || 252;
+  const cssH = canvas.clientHeight || canvas.height || 360;
+  if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+  }
+
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.scale(dpr, dpr);
+
+  // Wall-matched studio background
+  ctx.fillStyle = state.wall?.paintColor || '#FAFAFA';
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  const geom = geomOverride || computeDesignGeometry(state);
+  const repSeam = geom.seams.find((s) => s.stripeIndex === 0) || geom.seams[0];
+  if (!repSeam || !repSeam.pairs.length) {
+    ctx.fillStyle = '#64748B';
+    ctx.font = '500 12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('No visible stitches on wall', cssW / 2, cssH / 2);
+    ctx.restore();
+    return { pxPerIn: 0, viewWidthIn: 0, viewHeightIn: 0 };
+  }
+
+  const midIdx = Math.floor(repSeam.pairs.length / 2);
+  const centerPair = repSeam.pairs[midIdx];
+  const [centerWX, centerWY] = centerPair.stationPos;
+
+  const bandW = geom.stats.bandWidthIn || 1.25;
+  const zoomMode = state.stitchZoomLevel || 'detail';
+  let viewWidthIn;
+  if (zoomMode === 'macro') {
+    viewWidthIn = Math.max(1.6, bandW * 1.45);
+  } else if (zoomMode === 'strip') {
+    viewWidthIn = Math.max(5.5, bandW * 3.2);
+  } else {
+    viewWidthIn = Math.max(2.9, bandW * 2.15);
+  }
+
+  const pxPerIn = cssW / viewWidthIn;
+  const viewHeightIn = cssH / pxPerIn;
+  const wallToCanvas = (wx, wy) => [
+    cssW / 2 + (wx - centerWX) * pxPerIn,
+    cssH / 2 + (wy - centerWY) * pxPerIn,
+  ];
+
+  // Fine drafting grid (0.25" minor / 1.00" major, or 0.5 cm / 2 cm in cm mode)
+  const isCm = state.units === 'cm';
+  const minorStepIn = isCm ? (0.5 / 2.54) : 0.25;
+  const majorEvery = 4;
+  const halfWIn = viewWidthIn / 2 + minorStepIn;
+  const halfHIn = viewHeightIn / 2 + minorStepIn;
+
+  ctx.save();
+  const xStartIdx = Math.floor((centerWX - halfWIn) / minorStepIn);
+  const xEndIdx = Math.ceil((centerWX + halfWIn) / minorStepIn);
+  for (let i = xStartIdx; i <= xEndIdx; i++) {
+    const wx = i * minorStepIn;
+    const [cx] = wallToCanvas(wx, centerWY);
+    const isMajor = ((i % majorEvery) + majorEvery) % majorEvery === 0;
+    ctx.strokeStyle = isMajor ? 'rgba(100, 116, 139, 0.2)' : 'rgba(148, 163, 184, 0.1)';
+    ctx.lineWidth = isMajor ? 1 : 0.6;
+    ctx.beginPath();
+    ctx.moveTo(cx, 0);
+    ctx.lineTo(cx, cssH);
+    ctx.stroke();
+  }
+  const yStartIdx = Math.floor((centerWY - halfHIn) / minorStepIn);
+  const yEndIdx = Math.ceil((centerWY + halfHIn) / minorStepIn);
+  for (let i = yStartIdx; i <= yEndIdx; i++) {
+    const wy = i * minorStepIn;
+    const [, cy] = wallToCanvas(centerWX, wy);
+    const isMajor = ((i % majorEvery) + majorEvery) % majorEvery === 0;
+    ctx.strokeStyle = isMajor ? 'rgba(100, 116, 139, 0.2)' : 'rgba(148, 163, 184, 0.1)';
+    ctx.lineWidth = isMajor ? 1 : 0.6;
+    ctx.beginPath();
+    ctx.moveTo(0, cy);
+    ctx.lineTo(cssW, cy);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  const { stitch } = state;
+
+  // Seam centerline (always show subtle dashed guide in zoom if showSeamLine is off so V-angle & center gap read clearly)
+  ctx.save();
+  if (stitch.showSeamLine) {
+    ctx.strokeStyle = stitch.seamLineColor || '#BEB7A8';
+    ctx.lineWidth = Math.max(1.2, (stitch.seamLineWidthIn || 0.08) * pxPerIn);
+  } else {
+    ctx.strokeStyle = state.showCenterlineGuide ? 'rgba(37, 99, 235, 0.55)' : 'rgba(100, 116, 139, 0.28)';
+    ctx.lineWidth = 1.1;
+    ctx.setLineDash([5, 4]);
+  }
+  if (repSeam.points.length >= 2) {
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < repSeam.points.length; i++) {
+      const [px, py] = repSeam.points[i];
+      if (py < centerWY - halfHIn - 2 || py > centerWY + halfHIn + 2) continue;
+      const [cx, cy] = wallToCanvas(px, py);
+      if (!started) {
+        ctx.moveTo(cx, cy);
+        started = true;
+      } else {
+        ctx.lineTo(cx, cy);
+      }
+    }
+    if (started) ctx.stroke();
+  }
+  ctx.restore();
+
+  // Render visible stitch pairs from the representative stripe (and nearby stripes if Strip zoom sees them)
+  ctx.save();
+  ctx.fillStyle = stitch.color || '#C8102E';
+  const visMinY = centerWY - halfHIn - 2;
+  const visMaxY = centerWY + halfHIn + 2;
+  const visMinX = centerWX - halfWIn - 2;
+  const visMaxX = centerWX + halfWIn + 2;
+
+  for (const seam of geom.seams) {
+    if (seam.baseX + (state.layout.curveAmplitudeIn || 0) + bandW < visMinX ||
+        seam.baseX - (state.layout.curveAmplitudeIn || 0) - bandW > visMaxX) {
+      continue;
+    }
+    for (const pair of seam.pairs) {
+      const py = pair.stationPos[1];
+      if (py < visMinY || py > visMaxY) continue;
+      tracePoly(ctx, pair.leftPoly, wallToCanvas);
+      ctx.fill();
+      tracePoly(ctx, pair.rightPoly, wallToCanvas);
+      ctx.fill();
+    }
+  }
+
+  // Optional lace-hole dots
+  if (stitch.showLaceHoles) {
+    const r = Math.max(1.8, Math.max(0.05, stitch.widthIn * 0.28) * pxPerIn);
+    ctx.fillStyle = '#3B2F2F';
+    for (const pair of repSeam.pairs) {
+      const py = pair.stationPos[1];
+      if (py < visMinY || py > visMaxY) continue;
+      for (const [hx, hy] of pair.holes) {
+        const [cx, cy] = wallToCanvas(hx, hy);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  ctx.restore();
+
+  const fmtMeasure = (inches) => (isCm ? `${(inches * 2.54).toFixed(1)}cm` : `${inches.toFixed(2)}"`);
+
+  // Blueprint Callout 1: Band Width bracket pinned cleanly near the top
+  {
+    const minBX = Math.min(centerPair.leftBounds.minX, centerPair.rightBounds.minX);
+    const maxBX = Math.max(centerPair.leftBounds.maxX, centerPair.rightBounds.maxX);
+    const [lx] = wallToCanvas(minBX, centerWY);
+    const [rx] = wallToCanvas(maxBX, centerWY);
+    const by = 26;
+
+    ctx.save();
+    // Subtle vertical extension guides
+    ctx.strokeStyle = 'rgba(37, 99, 235, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(lx, by);
+    ctx.lineTo(lx, cssH * 0.5);
+    ctx.moveTo(rx, by);
+    ctx.lineTo(rx, cssH * 0.5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Bracket line & end ticks
+    ctx.strokeStyle = '#2563EB';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(lx, by - 4);
+    ctx.lineTo(lx, by + 4);
+    ctx.moveTo(rx, by - 4);
+    ctx.lineTo(rx, by + 4);
+    ctx.moveTo(lx, by);
+    ctx.lineTo(rx, by);
+    ctx.stroke();
+
+    // Label pill
+    const label = `Band ${fmtMeasure(bandW)}`;
+    ctx.font = '600 10.5px system-ui, sans-serif';
+    const tw = ctx.measureText(label).width + 10;
+    const mx = clamp((lx + rx) / 2, tw / 2 + 6, cssW - tw / 2 - 6);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.strokeStyle = 'rgba(37, 99, 235, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(mx - tw / 2, by - 20, tw, 15, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#1E40AF';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, mx, by - 12.5);
+    ctx.restore();
+  }
+
+  // Blueprint Callout 2: Vertical Pitch bracket along right side of center stitch pair
+  if (midIdx + 1 < repSeam.pairs.length) {
+    const nextPair = repSeam.pairs[midIdx + 1];
+    const maxRightX = Math.max(
+      centerPair.leftBounds.maxX,
+      centerPair.rightBounds.maxX,
+      nextPair.leftBounds.maxX,
+      nextPair.rightBounds.maxX
+    );
+    const [, yA] = wallToCanvas(centerPair.stationPos[0], centerPair.stationPos[1]);
+    const [, yB] = wallToCanvas(nextPair.stationPos[0], nextPair.stationPos[1]);
+    const [rightEdgePx] = wallToCanvas(maxRightX, centerWY);
+    const bx = Math.min(cssW - 14, rightEdgePx + 12);
+
+    if (Math.abs(yB - yA) >= 14 && bx < cssW - 6) {
+      ctx.save();
+      ctx.strokeStyle = '#0F766E';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(bx - 4, yA);
+      ctx.lineTo(bx + 4, yA);
+      ctx.moveTo(bx - 4, yB);
+      ctx.lineTo(bx + 4, yB);
+      ctx.moveTo(bx, yA);
+      ctx.lineTo(bx, yB);
+      ctx.stroke();
+
+      const label = fmtMeasure(stitch.spacingIn);
+      ctx.font = '600 10px system-ui, sans-serif';
+      const tw = ctx.measureText(label).width + 8;
+      const my = (yA + yB) / 2;
+      const lx = Math.min(cssW - tw - 4, bx + 5);
+      // If not enough room on right of bracket, place slightly left/over bracket cleanly
+      const pillX = bx + 5 + tw <= cssW - 3 ? lx : Math.max(4, cssW - tw - 4);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.strokeStyle = 'rgba(15, 118, 110, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(pillX, my - 8, tw, 16, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#0F766E';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, pillX + tw / 2, my);
+      ctx.restore();
+    }
+  }
+
+  // Bottom-left crisp physical scale bar
+  {
+    const barIn = isCm ? (zoomMode === 'macro' ? 1 / 2.54 : 2 / 2.54) : (zoomMode === 'macro' ? 0.5 : 1.0);
+    const barPx = barIn * pxPerIn;
+    const barLabel = isCm ? (zoomMode === 'macro' ? '1 cm' : '2 cm') : (zoomMode === 'macro' ? '0.50"' : '1.00"');
+    const padX = 10;
+    const padY = 10;
+    const boxW = Math.max(barPx + 16, 62);
+    const boxH = 26;
+    const bx = padX;
+    const by = cssH - padY - boxH;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, boxW, boxH, 5);
+    ctx.fill();
+    ctx.stroke();
+
+    const lineX0 = bx + (boxW - barPx) / 2;
+    const lineY = by + 18;
+    ctx.strokeStyle = '#0F172A';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(lineX0, lineY - 4);
+    ctx.lineTo(lineX0, lineY + 1);
+    ctx.lineTo(lineX0 + barPx, lineY + 1);
+    ctx.lineTo(lineX0 + barPx, lineY - 4);
+    ctx.stroke();
+
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.fillStyle = '#0F172A';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(barLabel, bx + boxW / 2, by + 8);
+    ctx.restore();
+  }
+
+  ctx.restore();
+  return { pxPerIn, viewWidthIn, viewHeightIn };
+}
+
+/**
  * Render a compact thumbnail data URL for the Saved Snapshots tray.
  */
 export function renderThumbnailDataUrl(state, photoImg = null, width = 260, height = 165) {

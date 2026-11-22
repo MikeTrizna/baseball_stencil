@@ -14,6 +14,8 @@ export function createDefaultState() {
     showGrid: true,
     showRulers: true,
     showCenterlineGuide: false,
+    showStitchZoom: true,
+    stitchZoomLevel: 'detail', // 'macro' | 'detail' | 'strip'
     maskBehindFurniture: true,
     wall: {
       widthIn: 144, // 12 ft

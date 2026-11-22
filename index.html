@@ -307,6 +307,7 @@
             <label class="chip-check"><input id="ctrl-show-grid" type="checkbox" /> Grid (1ft)</label>
             <label class="chip-check"><input id="ctrl-show-rulers" type="checkbox" /> Rulers</label>
             <label class="chip-check"><input id="ctrl-show-guide" type="checkbox" /> Seam Guide</label>
+            <label class="chip-check"><input id="ctrl-show-zoom" type="checkbox" /> Stitch Zoom</label>
           </div>
           <div class="stats-strip" id="stats-strip">
             <div class="stat-pill"><span class="stat-k">Stripes</span> <strong id="stat-stripes">0</strong></div>
@@ -318,10 +319,33 @@
           </div>
         </div>
 
-        <!-- Interactive Canvas Area -->
-        <div class="canvas-wrap" id="canvas-wrap">
-          <canvas id="stage-canvas"></canvas>
-          <div id="canvas-hint" class="canvas-hint">Drag horizontally to shift stripes • Drag furniture to move or resize</div>
+        <!-- Interactive Canvas Area + Zoomed Stitch Close-Up Panel -->
+        <div class="stage-split">
+          <div class="canvas-wrap" id="canvas-wrap">
+            <canvas id="stage-canvas"></canvas>
+            <div id="canvas-hint" class="canvas-hint">Drag horizontally to shift stripes • Drag furniture to move or resize</div>
+          </div>
+
+          <aside id="zoom-panel" class="zoom-panel" aria-label="Stitch geometry close-up preview">
+            <div class="zoom-panel-header">
+              <div class="zoom-panel-title">
+                <strong>🔍 Stitch Close-Up</strong>
+                <span id="zoom-scale-badge" class="zoom-scale-badge">~15×</span>
+              </div>
+              <button id="btn-close-zoom" type="button" class="icon-btn" title="Hide Stitch Close-Up panel" aria-label="Hide Stitch Close-Up panel">✕</button>
+            </div>
+            <div class="segmented-3 zoom-level-group" id="zoom-level-group">
+              <button type="button" data-zoom="macro" class="seg-btn">Macro</button>
+              <button type="button" data-zoom="detail" class="seg-btn active">Detail</button>
+              <button type="button" data-zoom="strip" class="seg-btn">Strip</button>
+            </div>
+            <div class="zoom-canvas-wrap">
+              <canvas id="zoom-canvas"></canvas>
+            </div>
+            <div class="zoom-panel-footer" id="zoom-panel-footer">
+              Live close-up of center stripe
+            </div>
+          </aside>
         </div>
 
         <!-- Saved Snapshots Tray -->

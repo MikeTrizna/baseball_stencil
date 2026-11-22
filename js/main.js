@@ -31,6 +31,7 @@ import {
 } from './storage.js';
 import {
   renderStage,
+  renderStitchZoom,
   renderThumbnailDataUrl,
   renderSplitCompare,
   getSampleRoomImage,
@@ -126,6 +127,17 @@ function drawMainStage() {
     showHandles: true,
   });
   updateStatsStrip(lastRenderResult.geom);
+
+  if (state.showStitchZoom !== false) {
+    const zoomRes = renderStitchZoom($('zoom-canvas'), state, lastRenderResult.geom);
+    if (zoomRes && zoomRes.pxPerIn > 0 && lastRenderResult.viewport?.pxPerIn > 0) {
+      const mag = zoomRes.pxPerIn / lastRenderResult.viewport.pxPerIn;
+      $('zoom-scale-badge').textContent = `${mag >= 10 ? Math.round(mag) : mag.toFixed(1)}× wall`;
+      $('zoom-panel-footer').innerHTML =
+        `<span>View: ${fmtDim(zoomRes.viewWidthIn, 1)} × ${fmtDim(zoomRes.viewHeightIn, 1)}</span>` +
+        `<span>Tip: ${state.stitch.tipStyle}</span>`;
+    }
+  }
 }
 
 function updateStatsStrip(geom) {
@@ -270,10 +282,18 @@ function syncControlsFromState() {
   $('ctrl-crown').value = state.wall.crownIn;
   $('ctrl-mask-furniture').checked = Boolean(state.maskBehindFurniture);
 
-  // Stage checkboxes
+  // Stage checkboxes & Stitch Close-Up panel
   $('ctrl-show-grid').checked = Boolean(state.showGrid);
   $('ctrl-show-rulers').checked = Boolean(state.showRulers);
   $('ctrl-show-guide').checked = Boolean(state.showCenterlineGuide);
+
+  const showZoom = state.showStitchZoom !== false;
+  $('ctrl-show-zoom').checked = showZoom;
+  $('zoom-panel').classList.toggle('hidden', !showZoom);
+  const zoomLevel = state.stitchZoomLevel || 'detail';
+  document.querySelectorAll('#zoom-level-group .seg-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.zoom === zoomLevel);
+  });
 
   // Photo controls
   $('photo-name-label').textContent = state.photo.useSample
@@ -975,10 +995,23 @@ function bindControls() {
     });
   });
 
-  // Stage checkboxes
+  // Stage checkboxes & Stitch Close-Up controls
   $('ctrl-show-grid').addEventListener('change', (e) => mutateState((s) => { s.showGrid = e.target.checked; }, false));
   $('ctrl-show-rulers').addEventListener('change', (e) => mutateState((s) => { s.showRulers = e.target.checked; }, false));
   $('ctrl-show-guide').addEventListener('change', (e) => mutateState((s) => { s.showCenterlineGuide = e.target.checked; }, false));
+  $('ctrl-show-zoom').addEventListener('change', (e) => {
+    mutateState((s) => { s.showStitchZoom = e.target.checked; }, false);
+    requestAnimationFrame(drawMainStage);
+  });
+  $('btn-close-zoom').addEventListener('click', () => {
+    mutateState((s) => { s.showStitchZoom = false; }, false);
+    requestAnimationFrame(drawMainStage);
+  });
+  document.querySelectorAll('#zoom-level-group .seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      mutateState((s) => { s.stitchZoomLevel = btn.dataset.zoom; }, false);
+    });
+  });
 
   // Photo upload & calibration
   $('btn-upload-photo').addEventListener('click', () => $('input-photo-file').click());

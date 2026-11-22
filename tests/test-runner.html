@@ -36,6 +36,7 @@
     import { encodeStateToHash, decodeStateFromHash } from '../js/storage.js';
     import { generateFullWallSVG, generateReusableTileSVG, generateSingleStripeSVG } from '../js/svg-export.js';
     import { computeSingleStripePdfPlan, generateSingleStripePDF, generateReusableStripPDF } from '../js/pdf-export.js';
+    import { renderStitchZoom } from '../js/renderer.js';
 
     const results = [];
 
@@ -186,6 +187,23 @@
       const tallCurved = applyPresetToState(tall, 'curved-baseball');
       assert(tallCurved.layout.curveCycles > cfg.layout.curveCycles, 'Taller wall should produce more curve waves');
       assert(computeCurveMetrics(tallCurved.layout, tallCurved.wall).isMlbMatch, 'Tall wall preset should still be MLB Match');
+    });
+
+    test('Zoomed Stitch Close-Up renderer renders Macro, Detail, and Strip magnification levels cleanly', () => {
+      const cfg = applyPresetToState(createDefaultState(), 'curved-baseball');
+      const canvas = document.createElement('canvas');
+      canvas.width = 260;
+      canvas.height = 360;
+
+      cfg.stitchZoomLevel = 'macro';
+      const macro = renderStitchZoom(canvas, cfg);
+      cfg.stitchZoomLevel = 'detail';
+      const detail = renderStitchZoom(canvas, cfg);
+      cfg.stitchZoomLevel = 'strip';
+      const strip = renderStitchZoom(canvas, cfg);
+
+      assert(macro.pxPerIn > detail.pxPerIn && detail.pxPerIn > strip.pxPerIn, 'Expected Macro > Detail > Strip magnification');
+      assert(macro.viewWidthIn > 0 && strip.viewHeightIn > 0, 'Expected positive close-up view dimensions');
     });
 
     const passedCount = results.filter((r) => r.passed).length;
